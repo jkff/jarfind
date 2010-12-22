@@ -19,7 +19,7 @@ import Data.Binary.Get
 import System.Console.GetOpt
 import System.Environment
 
-import Text.Regex.PCRE
+import Text.Regex.TDFA
 
 bToString :: B.ByteString -> String
 bToString   = map (chr . fromIntegral) . B.unpack

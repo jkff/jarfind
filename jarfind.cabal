@@ -1,5 +1,5 @@
 Name:                jarfind
-Version:             0.1.0.1
+Version:             0.1.0.2
 Cabal-version:       >= 1.6
 Build-type:          Simple
 Synopsis:            Tool for searching java classes, members and fields in classfiles and JAR archives
@@ -18,15 +18,15 @@ flag splitBase
   Default:           True
 
 Source-repository head
-  type: darcs
-  location: http://patch-tag.com/r/jkff/jarfind
+  type: git
+  location: git://github.com/jkff/jarfind
 
 Executable jarf
   if flag(splitBase)
-    Build-depends:   base >= 3 && < 4
+    Build-depends:   base >= 3 && < 5
   else
     Build-depends:   base < 3
-  Build-depends:     binary, bytestring >= 0.9.0, array, zip-archive >= 0.1.1.2, regex-pcre >= 0.94.1
+  Build-depends:     binary, bytestring >= 0.9.0, array, zip-archive >= 0.1.1.2, regex-tdfa
   Hs-Source-Dirs:    .
   Main-Is:           Main.hs
   Ghc-Options:       -O2

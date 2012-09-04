@@ -22,6 +22,99 @@ import System.Environment
 import Text.Regex.TDFA
 import JarFind
 
+-- Types related to cmdline arguments
+ 
+data ClassFileSource = ClassFile { path :: FilePath }
+                     | JarFile   { path :: FilePath }
+                     | ClassPath { paths :: [ClassFileSource] }
+
+data Location = InFile FilePath
+              | InJar { jarPath :: FilePath
+                      , innerPath :: FilePath
+                      }
+                deriving Show
+
+newtype SearchSource = SearchSource (Class->Bool)
+data SearchTarget = SearchClass
+                  | SearchMember (Member->Bool)
+
+data Args = Args { dataSource   :: [ClassFileSource]
+                 , searchSource :: SearchSource
+                 , searchTarget :: SearchTarget
+                 }
+
+data Result = FoundClass Location Class
+            | FoundMember Location Class Member
+              deriving Show
+
+
+----------------------------------------------------------------
+--                    ARGUMENTS PARSING                       --
+----------------------------------------------------------------
+
+
+data PlainArgs = PlainArgs { typeRegex :: Maybe String
+                           , memberRegex :: Maybe String
+                           , typeAccess :: Maybe String
+                           , memberAccess :: Maybe String
+                           , target :: Maybe String 
+                           }
+
+emptyArgs :: PlainArgs
+emptyArgs = PlainArgs Nothing Nothing Nothing Nothing Nothing
+
+data MemberKind = FieldKind | MethodKind deriving Eq
+
+parseArgs :: PlainArgs -> [String] -> Args
+parseArgs a paths = Args dataSource (SearchSource typeFilter) searchTarget
+    where searchTarget = case (memberRegex a, memberAccess a, target a) of 
+                            (Nothing, Nothing, Nothing) -> SearchClass
+                            _                           -> SearchMember memberFilter
+
+          searchMembers = isJust (memberRegex a) 
+
+          typeFilter = accessAndRegex (access (typeAccess a)) (typeRegex a) clsAccess clsName
+          
+          memberFilter mem = (memKind `maybeEq` kind mem)
+                           && accessAndRegex (access (memberAccess a)) (memberRegex a) 
+                                             mAccess mName mem
+              where kind (Field  _ _ _) = FieldKind
+                    kind (Method _ _ _) = MethodKind
+
+          memKind = case (target a) of 
+                        Just ('f':_) -> Just FieldKind 
+                        Just ('m':_) -> Just MethodKind 
+                        _            -> Nothing
+
+          dataSource = map toDataSource paths
+          toDataSource p | ".jar"   `isSuffixOf` p = JarFile p
+                         | ".class" `isSuffixOf` p = ClassFile p
+                         | ":"      `isInfixOf`  p = ClassPath . map toDataSource $ (==':') `unjoin` p
+                         | otherwise               = error $ "Unsupported datasource type: "++p
+
+accessAndRegex acc rx getAcc getName x =  (acc `maybeEq` (getAcc x)) 
+                                       && (nameMatchesRegex x)
+    where nameMatchesRegex x = case rx of 
+                                  Nothing -> True
+                                  Just rx -> getName x =~ rx
+          
+maybeEq Nothing  _ = True
+maybeEq (Just a) b = a == b
+          
+access a = case a of
+              Just "public"    -> Just Public
+              Just "private"   -> Just Private
+              Just "protected" -> Just Protected
+              Just "package"   -> Just Package
+              _                -> Nothing
+
+unjoin :: (a -> Bool) -> [a] -> [[a]]
+unjoin p s = go [] [] s
+    where go res cur []     = reverse (cur:res)
+          go res cur (x:xs) | p x       = go (cur:res) [] xs
+                            | otherwise = go res (x:cur) xs
+
+
 
 ----------------------------------------------------------------
 --                            MAIN                            --

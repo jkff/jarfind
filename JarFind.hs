@@ -22,15 +22,19 @@ import System.Environment
 import Text.Regex.TDFA
 
 bToString :: B.ByteString -> String
-bToString   = map (chr . fromIntegral) . B.unpack
+bToString = map (chr . fromIntegral) . B.unpack
 
 bFromString :: String -> B.ByteString
-bFromString = B.pack   . map (fromIntegral . ord) 
+bFromString = B.pack . map (fromIntegral . ord) 
 
 onString :: (String -> String) -> (B.ByteString -> B.ByteString)
-onString f  = bFromString . f . bToString
+onString f = bFromString . f . bToString
 
-data Access = Public | Private | Protected | Package deriving (Eq)
+data Access = Public
+            | Private
+            | Protected
+            | Package
+              deriving Eq
 
 instance Show Access where
     show Public = "public"
@@ -38,110 +42,22 @@ instance Show Access where
     show Protected = "protected"
     show Package = ""
 
+data Class = Class { clsAccess :: Access
+                   , clsMembers :: [Member]
+                   , clsName :: B.ByteString
+                   , clsIsInterface :: Bool
+                   }
+             deriving Show
 
-data Class = Class {
-    clsAccess :: Access,
-    clsMembers :: [Member],
-    clsName :: B.ByteString,
-    clsIsInterface :: Bool
-} deriving (Show)
-
-data Member = Method { mAccess :: Access, mName :: B.ByteString, mSig :: B.ByteString }
-            | Field  { mAccess :: Access, mName :: B.ByteString, mSig :: B.ByteString }
-            deriving (Show)
-
--- Types related to cmdline arguments
- 
-data ClassFileSource = ClassFile { path :: FilePath    }
-                     | JarFile   { path :: FilePath    }
-                     | ClassPath { paths :: [ClassFileSource] }
-
-data Location = InFile FilePath
-              | InJar  { jarPath :: FilePath, innerPath :: FilePath }
-              deriving (Show)
-
-newtype SearchSource = SearchSource (Class->Bool)
-data SearchTarget = SearchClass
-                  | SearchMember (Member->Bool)
-
-data Args = Args {
-    dataSource   :: [ClassFileSource],
-    searchSource :: SearchSource,
-    searchTarget :: SearchTarget
-}
-
-data Result = FoundClass Location Class
-            | FoundMember Location Class Member
-            deriving (Show)
-
-
-----------------------------------------------------------------
---                    ARGUMENTS PARSING                       --
-----------------------------------------------------------------
-
-
-data PlainArgs = PlainArgs {
-    typeRegex :: Maybe String,
-    memberRegex :: Maybe String,
-    typeAccess :: Maybe String,
-    memberAccess :: Maybe String,
-    target :: Maybe String 
-}
-
-emptyArgs :: PlainArgs
-emptyArgs = PlainArgs Nothing Nothing Nothing Nothing Nothing
-
-data MemberKind = FieldKind | MethodKind deriving (Eq)
-
-parseArgs :: PlainArgs -> [String] -> Args
-parseArgs a paths = Args dataSource (SearchSource typeFilter) searchTarget
-    where searchTarget = case (memberRegex a,memberAccess a,target a) of 
-                            (Nothing,Nothing,Nothing) -> SearchClass
-                            _                         -> SearchMember memberFilter
-
-          searchMembers = isJust (memberRegex a) 
-
-          typeFilter = accessAndRegex (access (typeAccess a)) (typeRegex a) clsAccess clsName
-          
-          memberFilter mem = (memKind `maybeEq` kind mem)
-                           && accessAndRegex (access (memberAccess a)) (memberRegex a) 
-                                             mAccess mName mem
-              where kind (Field  _ _ _) = FieldKind
-                    kind (Method _ _ _) = MethodKind
-
-          memKind = case (target a) of 
-                        Just ('f':_) -> Just FieldKind 
-                        Just ('m':_) -> Just MethodKind 
-                        _            -> Nothing
-
-          access a = case a of
-                        Just "public"    -> Just Public
-                        Just "private"   -> Just Private
-                        Just "protected" -> Just Protected
-                        Just "package"   -> Just Package
-                        _                -> Nothing
-
-          dataSource = map toDataSource paths
-          toDataSource p | ".jar"   `isSuffixOf` p = JarFile p
-                         | ".class" `isSuffixOf` p = ClassFile p
-                         | ":"      `isInfixOf`  p = ClassPath . map toDataSource $ (==':') `unjoin` p
-                         | otherwise               = error $ "Unsupported datasource type: "++p
-
-          accessAndRegex acc rx getAcc getName x =  (acc `maybeEq` (getAcc x)) 
-                                                 && (nameMatchesRegex x)
-              where nameMatchesRegex x = case rx of 
-                                            Nothing -> True
-                                            Just rx -> getName x =~ rx
-          
-          maybeEq Nothing  _ = True
-          maybeEq (Just a) b = a==b
-          
-          unjoin :: (a->Bool) -> [a] -> [[a]]
-          unjoin p s = go [] [] s
-              where go res cur []     = reverse (cur:res)
-                    go res cur (x:xs) | p x       = go (cur:res) [] xs
-                                      | otherwise = go res (x:cur) xs
-
+data Member = Method { mAccess :: Access
+                     , mName   :: B.ByteString
+                     , mSig    :: B.ByteString
+                     }
+            | Field  { mAccess :: Access
+                     , mName :: B.ByteString
+                     , mSig :: B.ByteString
+                     }
+              deriving Show
 
 ----------------------------------------------------------------
 --                      CLASS FILE PARSING                    --
@@ -149,10 +65,10 @@ parseArgs a paths = Args dataSource (SearchSource typeFilter) searchTarget
 
 -- Constant pool stuff
 
-data ConstantPool = ConstantPool { 
-    cpPos    :: UArray Word16 Word16,
-    cpData   :: B.ByteString
-}
+data ConstantPool = ConstantPool
+    { cpPos  :: UArray Word16 Word16
+    , cpData :: B.ByteString
+    }
 
 getUTF8FromCP :: ConstantPool -> Word16 -> B.ByteString
 getUTF8FromCP cp@(ConstantPool cpPos cpData) i = res
@@ -184,7 +100,7 @@ parseClassFile = runGet classFileParser
 
 classFileParser :: Get Class
 classFileParser = do
-    skip (4+2+2) -- magic, minor_version, major_version
+    skip (4 + 2 + 2) -- magic, minor_version, major_version
     cpSize      <- readWord16
     cp          <- parseConstantPool cpSize
     accessFlags <- readWord16
@@ -195,7 +111,7 @@ classFileParser = do
     let isInterface    = (0 /= accessFlags .&. 0x0200)
     skip 2                    -- super_class
     ifCount     <- readInt16  -- interfaces_count
-    skip (2*ifCount)          -- u2 interfaces[interfaces_count]
+    skip (2 * ifCount)          -- u2 interfaces[interfaces_count]
     fieldCount  <- readInt16
     fields      <- replicateM fieldCount (parseMember cp Field decryptType) 
     methodCount <- readInt16
@@ -211,15 +127,19 @@ parseMember cp ctor decryptor = do
     nameIndex   <- readWord16
     descrIndex  <- readWord16
     attCount    <- readInt16
-    replicateM attCount $ do skip 2; attLen <- readWord32; skip (fromIntegral attLen)
+    replicateM attCount $ do
+                            skip 2
+                            attLen <- readWord32
+                            skip (fromIntegral attLen)
+
     return $ ctor (flagsToAccess accessFlags)
                   (getUTF8FromCP cp nameIndex)
                   (decryptor (getUTF8FromCP cp descrIndex))
 
 -- A strict unboxed list and conversion to an UArray with STUArray's
 data List' a = Nil' 
-             | (:!)  {-# UNPACK #-} !a  
-                     {-# UNPACK #-} !(List' a)
+             | (:!) !a  
+                    !(List' a)
 infixr 5 :!
 toArray' (lo,hi) list = do
     arr <- newArray_ (lo,hi)

@@ -30,20 +30,20 @@ import System.Environment
 
 import Text.Regex.TDFA
 
-data Class = Class { clsAccess :: Access
-                   , clsMembers :: [Member]
-                   , clsName :: String
+data Class = Class { clsName        :: String
+                   , clsAccess      :: Access
                    , clsIsInterface :: Bool
+                   , clsMembers     :: [Member]
                    }
              deriving Show
 
-data Member = Method { mAccess :: Access
-                     , mName   :: String
+data Member = Method { mName   :: String
+                     , mAccess :: Access
                      , mSig    :: String
                      }
-            | Field  { mAccess :: Access
-                     , mName :: String
-                     , mSig :: String
+            | Field  { mName   :: String
+                     , mAccess :: Access
+                     , mSig    :: String
                      }
               deriving Show
 
@@ -54,10 +54,10 @@ data Access = Public
               deriving Eq
 
 instance Show Access where
-    show Public = "public"
-    show Private = "private"
+    show Public    = "public"
+    show Private   = "private"
     show Protected = "protected"
-    show Package = ""
+    show Package   = ""
 
 ----------------------------------------------------------------
 --                      CLASS FILE PARSING                    --
@@ -113,10 +113,10 @@ parseClassFile = runGet $ do
     fields      <- replicateM fieldCount (parseMember cp Field decryptType) 
     methodCount <- readInt16
     methods     <- replicateM methodCount (parseMember cp Method decryptSig)
-    return (Class access (fields++methods) (bToString className) isInterface)
+    return (Class (bToString className) access isInterface (fields++methods))
 
 parseMember :: ConstantPool -> 
-               (Access -> String -> String -> Member) ->
+               (String -> Access -> String -> Member) ->
                (B.ByteString -> B.ByteString) ->
                Get Member
 parseMember cp ctor decryptor = do
@@ -129,8 +129,8 @@ parseMember cp ctor decryptor = do
                             attLen <- readWord32
                             skip (fromIntegral attLen)
 
-    return $ ctor (flagsToAccess accessFlags)
-                  (bToString (getUTF8FromCP cp nameIndex))
+    return $ ctor (bToString (getUTF8FromCP cp nameIndex))
+                  (flagsToAccess accessFlags)
                   (bToString (decryptor (getUTF8FromCP cp descrIndex)))
 
 -- A strict unboxed list and conversion to an UArray with STUArray's
@@ -153,7 +153,6 @@ parseConstantPool n = do
     cpPosArray <- return $ runSTUArray (toArray' (0,n-1) cpPosList)
     return (ConstantPool cpPosArray bs)
 
-    
 parseConstantPool' :: Word16 -> Word16 -> List' Word16 -> Get (List' Word16)
 parseConstantPool' 0 pos res = return res
 parseConstantPool' n pos res = do
@@ -239,12 +238,12 @@ bFromString = B.pack . map (fromIntegral . ord)
 onString :: (String -> String) -> (B.ByteString -> B.ByteString)
 onString f = bFromString . f . bToString
 
-data ClassFileSource = ClassFile { path :: FilePath }
-                     | JarFile   { path :: FilePath }
+data ClassFileSource = ClassFile { path  :: FilePath }
+                     | JarFile   { path  :: FilePath }
                      | ClassPath { paths :: [ClassFileSource] }
 
 data Location = InFile FilePath
-              | InJar { jarPath :: FilePath
+              | InJar { jarPath   :: FilePath
                       , innerPath :: FilePath
                       }
                 deriving Show

@@ -153,8 +153,8 @@ presentLoc (InFile path) = path
 presentLoc (InJar jp ip) = jp ++ "!" ++ ip
 
 presentClass :: Class -> String
-presentClass (Class acc _ name False) = show acc ++ " class "     ++ name
-presentClass (Class acc _ name True)  = show acc ++ " interface " ++ name
+presentClass (Class name acc False _) = show acc ++ " class "     ++ name
+presentClass (Class name acc True _)  = show acc ++ " interface " ++ name
 
 -- Search
 

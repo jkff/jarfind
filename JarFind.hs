@@ -21,27 +21,6 @@ import System.Environment
 
 import Text.Regex.TDFA
 
-bToString :: B.ByteString -> String
-bToString = map (chr . fromIntegral) . B.unpack
-
-bFromString :: String -> B.ByteString
-bFromString = B.pack . map (fromIntegral . ord) 
-
-onString :: (String -> String) -> (B.ByteString -> B.ByteString)
-onString f = bFromString . f . bToString
-
-data Access = Public
-            | Private
-            | Protected
-            | Package
-              deriving Eq
-
-instance Show Access where
-    show Public = "public"
-    show Private = "private"
-    show Protected = "protected"
-    show Package = ""
-
 data Class = Class { clsAccess :: Access
                    , clsMembers :: [Member]
                    , clsName :: B.ByteString
@@ -58,6 +37,18 @@ data Member = Method { mAccess :: Access
                      , mSig :: B.ByteString
                      }
               deriving Show
+
+data Access = Public
+            | Private
+            | Protected
+            | Package
+              deriving Eq
+
+instance Show Access where
+    show Public = "public"
+    show Private = "private"
+    show Protected = "protected"
+    show Package = ""
 
 ----------------------------------------------------------------
 --                      CLASS FILE PARSING                    --
@@ -229,4 +220,13 @@ flagsToAccess w | 0 /= w.&.0x0001 = Public
                 | 0 /= w.&.0x0004 = Protected
                 | otherwise       = Package
 
+
+bToString :: B.ByteString -> String
+bToString = map (chr . fromIntegral) . B.unpack
+
+bFromString :: String -> B.ByteString
+bFromString = B.pack . map (fromIntegral . ord)
+
+onString :: (String -> String) -> (B.ByteString -> B.ByteString)
+onString f = bFromString . f . bToString
 

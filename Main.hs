@@ -23,16 +23,6 @@ import JarFind
 
 -- Types related to cmdline arguments
  
-data ClassFileSource = ClassFile { path :: FilePath }
-                     | JarFile   { path :: FilePath }
-                     | ClassPath { paths :: [ClassFileSource] }
-
-data Location = InFile FilePath
-              | InJar { jarPath :: FilePath
-                      , innerPath :: FilePath
-                      }
-                deriving Show
-
 newtype SearchSource = SearchSource (Class->Bool)
 data SearchTarget = SearchClass
                   | SearchMember (Member->Bool)
@@ -174,18 +164,3 @@ search (SearchSource classP) SearchClass (loc,c) =
 search (SearchSource classP) (SearchMember memP) (loc,c) =
     if (classP c) then [FoundMember loc c mem | mem <- clsMembers c, memP mem]
                   else []
-
-
--- Getting the actuall classes to search in
-
-parseFileSource :: ClassFileSource -> IO [(Location, Class)]
-parseFileSource (ClassFile path) = do
-    f <- parseClassFile <$> B.readFile path
-    return [(InFile path, f)]
-parseFileSource (JarFile jar)    = do
-    archive <- toArchive <$> B.readFile jar
-    return [(InJar jar fileName, parseClassFile $ fromEntry entry)
-            | entry <- zEntries archive,
-              let fileName = eRelativePath entry,
-              ".class" `isSuffixOf` fileName]
-parseFileSource (ClassPath paths) = concat <$> (sequence $ parseFileSource <$> paths)

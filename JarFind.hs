@@ -4,12 +4,16 @@ module JarFind
 ( Class(..)
 , Member(..)
 , Access(..)
+, ClassFileSource(..)
+, Location(..)
 , parseClassFile
+, parseFileSource
 ) where
 
 import Codec.Archive.Zip
 import qualified Data.ByteString.Lazy as B
 import Control.Monad
+import Control.Applicative ((<$>))
 import Data.List
 import Data.Bits
 import Data.Maybe
@@ -235,3 +239,24 @@ bFromString = B.pack . map (fromIntegral . ord)
 onString :: (String -> String) -> (B.ByteString -> B.ByteString)
 onString f = bFromString . f . bToString
 
+data ClassFileSource = ClassFile { path :: FilePath }
+                     | JarFile   { path :: FilePath }
+                     | ClassPath { paths :: [ClassFileSource] }
+
+data Location = InFile FilePath
+              | InJar { jarPath :: FilePath
+                      , innerPath :: FilePath
+                      }
+                deriving Show
+
+parseFileSource :: ClassFileSource -> IO [(Location, Class)]
+parseFileSource (ClassFile path) = do
+    f <- parseClassFile <$> B.readFile path
+    return [(InFile path, f)]
+parseFileSource (JarFile jar)    = do
+    archive <- toArchive <$> B.readFile jar
+    return [(InJar jar fileName, parseClassFile $ fromEntry entry)
+            | entry <- zEntries archive,
+              let fileName = eRelativePath entry,
+              ".class" `isSuffixOf` fileName]
+parseFileSource (ClassPath paths) = concat <$> (sequence $ parseFileSource <$> paths)

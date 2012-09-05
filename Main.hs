@@ -1,10 +1,9 @@
-{-# LANGUAGE BangPatterns #-}
-
 module Main (main) where
 
 import Codec.Archive.Zip
 import qualified Data.ByteString.Lazy as B
 import Control.Monad
+import Control.Applicative ((<$>))
 import Data.List
 import Data.Bits
 import Data.Maybe
@@ -146,7 +145,7 @@ showHelp = putStrLn $ usageInfo usage options
 
 run :: Args -> IO ()
 run (Args dataS searchS searchT) = do
-    classes <- parseDataSource dataS
+    classes <- parseFileSource (ClassPath dataS)
     mapM_ (putStrLn . present) . concatMap (search searchS searchT) $ classes
 
 -- Results presentation
@@ -179,21 +178,14 @@ search (SearchSource classP) (SearchMember memP) (loc,c) =
 
 -- Getting the actuall classes to search in
 
-parseDataSource :: [ClassFileSource] -> IO [(Location, Class)]
-parseDataSource = fmap (map (second parseClassFile)) . fmap concat . sequence . map files
-    where second f (a,b) = (a, f b)
-
-files :: ClassFileSource -> IO [(Location, B.ByteString)]
-files (ClassFile path) = do
-    f <- B.readFile path
+parseFileSource :: ClassFileSource -> IO [(Location, Class)]
+parseFileSource (ClassFile path) = do
+    f <- parseClassFile <$> B.readFile path
     return [(InFile path, f)]
-files (JarFile jar)    = do
-    archive <- toArchive `liftM` B.readFile jar
-    return [(InJar jar fileName, fromEntry entry)
+parseFileSource (JarFile jar)    = do
+    archive <- toArchive <$> B.readFile jar
+    return [(InJar jar fileName, parseClassFile $ fromEntry entry)
             | entry <- zEntries archive,
               let fileName = eRelativePath entry,
               ".class" `isSuffixOf` fileName]
-files (ClassPath paths) = fmap concat . sequence . map files $ paths
-
-
-
+parseFileSource (ClassPath paths) = concat <$> (sequence $ parseFileSource <$> paths)

@@ -1,6 +1,11 @@
 {-# LANGUAGE BangPatterns #-}
 
-module JarFind where
+module JarFind
+( Class(..)
+, Member(..)
+, Access(..)
+, parseClassFile
+) where
 
 import Codec.Archive.Zip
 import qualified Data.ByteString.Lazy as B
@@ -23,18 +28,18 @@ import Text.Regex.TDFA
 
 data Class = Class { clsAccess :: Access
                    , clsMembers :: [Member]
-                   , clsName :: B.ByteString
+                   , clsName :: String
                    , clsIsInterface :: Bool
                    }
              deriving Show
 
 data Member = Method { mAccess :: Access
-                     , mName   :: B.ByteString
-                     , mSig    :: B.ByteString
+                     , mName   :: String
+                     , mSig    :: String
                      }
             | Field  { mAccess :: Access
-                     , mName :: B.ByteString
-                     , mSig :: B.ByteString
+                     , mName :: String
+                     , mSig :: String
                      }
               deriving Show
 
@@ -104,10 +109,10 @@ parseClassFile = runGet $ do
     fields      <- replicateM fieldCount (parseMember cp Field decryptType) 
     methodCount <- readInt16
     methods     <- replicateM methodCount (parseMember cp Method decryptSig)
-    return (Class access (fields++methods) className isInterface)
+    return (Class access (fields++methods) (bToString className) isInterface)
 
 parseMember :: ConstantPool -> 
-               (Access -> B.ByteString -> B.ByteString -> Member) ->
+               (Access -> String -> String -> Member) ->
                (B.ByteString -> B.ByteString) ->
                Get Member
 parseMember cp ctor decryptor = do
@@ -121,8 +126,8 @@ parseMember cp ctor decryptor = do
                             skip (fromIntegral attLen)
 
     return $ ctor (flagsToAccess accessFlags)
-                  (getUTF8FromCP cp nameIndex)
-                  (decryptor (getUTF8FromCP cp descrIndex))
+                  (bToString (getUTF8FromCP cp nameIndex))
+                  (bToString (decryptor (getUTF8FromCP cp descrIndex)))
 
 -- A strict unboxed list and conversion to an UArray with STUArray's
 data List' a = Nil' 

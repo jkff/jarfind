@@ -156,16 +156,16 @@ present (FoundClass loc cls) = presentLoc loc ++ ": " ++ presentClass cls
 present (FoundMember loc cls mem) = presentLoc loc ++ ": " ++ 
                                     presentClass cls ++ ": " ++ 
                                     show (mAccess mem) ++ " " ++ 
-                                    bToString (mName mem) ++ " :: " ++ 
-                                    bToString (mSig mem)
+                                    (mName mem) ++ " :: " ++ 
+                                    (mSig mem)
 
 presentLoc :: Location -> String
 presentLoc (InFile path) = path
 presentLoc (InJar jp ip) = jp ++ "!" ++ ip
 
 presentClass :: Class -> String
-presentClass (Class acc _ name False) = show acc ++ " class "     ++ bToString name
-presentClass (Class acc _ name True)  = show acc ++ " interface " ++ bToString name
+presentClass (Class acc _ name False) = show acc ++ " class "     ++ name
+presentClass (Class acc _ name True)  = show acc ++ " interface " ++ name
 
 -- Search
 

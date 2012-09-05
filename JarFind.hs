@@ -96,10 +96,7 @@ readWord32 :: Get Word32
 readWord32 = get
 
 parseClassFile :: B.ByteString -> Class
-parseClassFile = runGet classFileParser
-
-classFileParser :: Get Class
-classFileParser = do
+parseClassFile = runGet $ do
     skip (4 + 2 + 2) -- magic, minor_version, major_version
     cpSize      <- readWord16
     cp          <- parseConstantPool cpSize
